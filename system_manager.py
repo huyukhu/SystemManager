@@ -10,6 +10,7 @@ import json
 import os
 import tempfile
 import asyncio
+import sys
 from CTkListbox import CTkListbox
 from tkinter import messagebox
 from PIL import ImageGrab
@@ -20,10 +21,51 @@ from discord.ext import commands
 kernel32 = ctypes.WinDLL('kernel32')
 psapi = ctypes.WinDLL('psapi')
 
+class AutoUpdater:
+    def __init__(self):
+        self.repo_url = "https://raw.githubusercontent.com/huyukhu/SystemManager/main/"
+        self.current_version = self.get_current_version()
+        
+    def get_current_version(self):
+        try:
+            with open("version.txt", "r") as f:
+                return f.read().strip()
+        except:
+            return "1.0"
+            
+    def check_update(self):
+        try:
+            response = requests.get(f"{self.repo_url}version.txt")
+            latest_version = response.text.strip()
+            
+            if latest_version > self.current_version:
+                return True, latest_version
+            return False, None
+        except Exception as e:
+            print("Güncelleme kontrol hatası:", str(e))
+            return False, None
+            
+    def perform_update(self):
+        try:
+            files = ["system_manager.py", "version.txt"]
+            for file in files:
+                response = requests.get(f"{self.repo_url}{file}")
+                with open(file, "wb") as f:
+                    f.write(response.content)
+            
+            messagebox.showinfo("Başarılı", "Program yeniden başlatılacak")
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
+        except Exception as e:
+            messagebox.showerror("Hata", f"Güncelleme başarısız: {str(e)}")
+
 class ShutdownApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Advanced System Manager 4.4.1")
+        self.updater = AutoUpdater()
+        self.check_for_updates()
+        
+        self.title("Advanced System Manager 5.0")
         self.geometry("1200x800")
         
         # Yapılandırma ayarları
@@ -56,28 +98,58 @@ class ShutdownApp(ctk.CTk):
         self.monitor_ram()
         self.start_process_monitor()
 
+    def check_for_updates(self):
+        update_available, latest_version = self.updater.check_update()
+        if update_available:
+            answer = messagebox.askyesno(
+                "Güncelleme Mevcut",
+                f"Yeni sürüm ({latest_version}) mevcut! Güncellemek ister misiniz?"
+            )
+            if answer:
+                self.updater.perform_update()
+
     def create_main_interface(self):
-        """Ana arayüz bileşenlerini oluşturur"""
         self.tab_view = ctk.CTkTabview(master=self)
         self.tab_view.pack(fill='both', expand=True, padx=20, pady=20)
         
-        # Sekmeler
         tabs = [
             ("⏻ Sistem Kapatma", self.create_shutdown_content),
             ("⏱ Geri Sayım", self.create_countdown_content),
             ("💾 RAM Yönetimi", self.create_ram_content),
             ("✖ Program Kapatma", self.create_process_content),
             ("🔔 Bildirimler", self.create_discord_content),
-            ("🤖 Discord Bot", self.create_bot_content)
+            ("🤖 Discord Bot", self.create_bot_content),
+            ("🔄 Güncellemeler", self.create_update_content)
         ]
         
         for tab_name, tab_method in tabs:
             tab = self.tab_view.add(tab_name)
             tab_method(tab)
 
-    # ----------------------- SİSTEM KAPATMA BÖLÜMÜ -----------------------
+    def create_update_content(self, tab):
+        frame = ctk.CTkFrame(master=tab)
+        frame.pack(pady=20, padx=20, fill='both', expand=True)
+        
+        ctk.CTkLabel(frame, text="Otomatik Güncelleme Ayarları", font=("Arial", 16)).pack(pady=10)
+        
+        info_frame = ctk.CTkFrame(frame)
+        info_frame.pack(pady=10)
+        
+        ctk.CTkLabel(info_frame, text="Mevcut Versiyon:").pack(side='left', padx=5)
+        self.version_label = ctk.CTkLabel(info_frame, text=self.updater.current_version)
+        self.version_label.pack(side='left', padx=5)
+        
+        btn_frame = ctk.CTkFrame(frame)
+        btn_frame.pack(pady=10)
+        ctk.CTkButton(
+            btn_frame, 
+            text="Şimdi Kontrol Et", 
+            command=lambda: self.check_for_updates(),
+            fg_color="#5bc0de"
+        ).pack(side='left', padx=5)
+
+    # Diğer sekme fonksiyonları
     def create_shutdown_content(self, tab):
-        """Sistem kapatma sekmesi içeriği"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
         
@@ -100,7 +172,6 @@ class ShutdownApp(ctk.CTk):
         ctk.CTkButton(btn_frame, text="İptal Et", command=self.cancel_shutdown, fg_color="#d9534f").pack(side='left', padx=5)
 
     def set_scheduled_shutdown(self):
-        """Zamanlı kapatma ayarları"""
         try:
             hours = int(self.shutdown_hour.get())
             mins = int(self.shutdown_min.get())
@@ -124,7 +195,6 @@ class ShutdownApp(ctk.CTk):
             messagebox.showerror("Hata", f"❌ Geçersiz giriş: {str(e)}")
 
     def schedule_shutdown(self, target_time):
-        """Zamanlanmış kapatma işlemi"""
         while True:
             now = datetime.datetime.now()
             if now >= target_time:
@@ -132,9 +202,7 @@ class ShutdownApp(ctk.CTk):
                 break
             time.sleep(1)
 
-    # ----------------------- GERİ SAYIM BÖLÜMÜ -----------------------
     def create_countdown_content(self, tab):
-        """Geri sayım sekmesi içeriği"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
         
@@ -154,7 +222,6 @@ class ShutdownApp(ctk.CTk):
         ctk.CTkButton(frame, text="Başlat", command=self.set_countdown_shutdown).pack(pady=10)
 
     def set_countdown_shutdown(self):
-        """Geri sayımlı kapatma ayarları"""
         try:
             hours = int(self.countdown_hour.get())
             mins = int(self.countdown_min.get())
@@ -173,18 +240,14 @@ class ShutdownApp(ctk.CTk):
             messagebox.showerror("Hata", f"❌ Geçersiz giriş: {str(e)}")
 
     def countdown_shutdown(self, seconds):
-        """Geri sayım işlemini yönetir"""
         time.sleep(seconds)
         subprocess.run(["shutdown", "/s", "/t", "0"], shell=True)
 
     def cancel_shutdown(self):
-        """Planlanmış tüm kapatma işlemlerini iptal eder"""
         subprocess.run(["shutdown", "/a"], shell=True)
         messagebox.showinfo("Bilgi", "✅ Tüm kapatma planları iptal edildi")
 
-    # ----------------------- RAM YÖNETİMİ BÖLÜMÜ -----------------------
     def create_ram_content(self, tab):
-        """RAM yönetimi sekmesi içeriği"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
         
@@ -222,17 +285,13 @@ class ShutdownApp(ctk.CTk):
                 continue
         messagebox.showinfo("Başarılı", "RAM başarıyla temizlendi")
 
-    # ----------------------- PROSES YÖNETİMİ BÖLÜMÜ -----------------------
     def create_process_content(self, tab):
-        """Program kapatma sekmesi içeriği"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
         
-        # Üst araç çubuğu
         toolbar_frame = ctk.CTkFrame(frame)
         toolbar_frame.pack(fill='x', pady=5)
         
-        # Yenileme düğmesi
         ctk.CTkButton(
             toolbar_frame,
             text="🔄 Listeyi Yenile",
@@ -241,7 +300,6 @@ class ShutdownApp(ctk.CTk):
             fg_color="#5bc0de"
         ).pack(side='right', padx=5)
         
-        # Arama çubuğu
         self.search_var = ctk.StringVar()
         self.search_entry = ctk.CTkEntry(
             toolbar_frame,
@@ -252,7 +310,6 @@ class ShutdownApp(ctk.CTk):
         self.search_entry.pack(side='left', fill='x', expand=True, padx=5)
         self.search_var.trace_add("write", self.schedule_search)
         
-        # Proses listesi
         self.process_list = CTkListbox(frame, width=500, height=300)
         self.process_list.pack(pady=10, fill='both', expand=True)
         
@@ -461,9 +518,7 @@ class ShutdownApp(ctk.CTk):
                     pass
         return False
 
-    # ----------------------- DISCORD BİLDİRİMLERİ -----------------------
     def create_discord_content(self, tab):
-        """Discord bildirim ayarları sekmesi"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
 
@@ -582,19 +637,15 @@ class ShutdownApp(ctk.CTk):
         except Exception as e:
             print(f"Discord bildirim hatası: {str(e)}")
 
-    # ----------------------- DISCORD BOT BÖLÜMÜ -----------------------
     def create_bot_content(self, tab):
-        """Discord Bot Ayarları Sekmesi"""
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
         
-        # Bot Token Giriş
         ctk.CTkLabel(frame, text="Discord Bot Token:").pack(pady=5)
         self.bot_token_entry = ctk.CTkEntry(frame, width=400)
         self.bot_token_entry.pack(pady=5)
         self.bot_token_entry.insert(0, self.bot_token)
         
-        # Silme süresi ayarı
         delete_frame = ctk.CTkFrame(frame)
         delete_frame.pack(pady=5)
         ctk.CTkLabel(delete_frame, text="Ekran Görüntüsü Silme Süresi (dakika):").pack(side='left', padx=5)
@@ -602,7 +653,6 @@ class ShutdownApp(ctk.CTk):
         self.delete_time_entry.pack(side='left', padx=5)
         self.delete_time_entry.insert(0, self.screenshot_delete_time)
         
-        # Bot kontrolleri
         self.bot_status = ctk.CTkLabel(frame, text="Bot Durumu: Kapalı")
         self.bot_status.pack(pady=5)
         
@@ -614,19 +664,16 @@ class ShutdownApp(ctk.CTk):
         )
         self.bot_btn.pack(pady=10)
         
-        # Komut bilgilendirme
         ctk.CTkLabel(frame, text="Kullanılabilir Komutlar:").pack(pady=5)
         ctk.CTkLabel(frame, text="!screenshot - Ekran görüntüsü al ve belirtilen süre sonra sil").pack()
 
     def toggle_bot(self):
-        """Botu başlat/durdur"""
         if self.bot_thread and self.bot_thread.is_alive():
             self.stop_bot()
         else:
             self.start_bot()
             
     def start_bot(self):
-        """Discord botunu başlat"""
         self.bot_token = self.bot_token_entry.get().strip()
         if not self.bot_token:
             messagebox.showerror("Hata", "Lütfen bot token girin!")
@@ -639,7 +686,7 @@ class ShutdownApp(ctk.CTk):
                 intents=intents,
                 help_command=None
             )
-            self.bot.app = self  # Ana uygulama referansını ekle
+            self.bot.app = self
             
             @self.bot.event
             async def on_ready():
@@ -652,9 +699,7 @@ class ShutdownApp(ctk.CTk):
                 
             @self.bot.command()
             async def screenshot(ctx):
-                """Ekran görüntüsü al ve belirtilen süre sonra sil"""
                 try:
-                    # Silme süresini al
                     try:
                         delete_time = int(ctx.bot.app.delete_time_entry.get().strip())
                         if delete_time <= 0:
@@ -662,7 +707,6 @@ class ShutdownApp(ctk.CTk):
                     except:
                         delete_time = 60
 
-                    # Ekran görüntüsü al
                     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                         ImageGrab.grab().save(tmp.name, "PNG")
                         message = await ctx.send(
@@ -671,7 +715,6 @@ class ShutdownApp(ctk.CTk):
                         )
                     os.unlink(tmp.name)
 
-                    # Belirtilen süre sonra mesajı sil
                     await asyncio.sleep(delete_time * 60)
                     await message.delete()
                     
@@ -689,16 +732,13 @@ class ShutdownApp(ctk.CTk):
             messagebox.showerror("Hata", f"Bot başlatılamadı: {str(e)}")
             
     def stop_bot(self):
-        """Botu durdur"""
         if self.bot:
             self.bot_status.configure(text="Bot Durumu: Kapalı", text_color="white")
             self.bot_btn.configure(text="Botu Başlat", fg_color="#5865F2")
             self.bot.loop.create_task(self.bot.close())
             self.save_config()
 
-    # ----------------------- YAPILANDIRMA YÖNETİMİ -----------------------
     def save_config(self):
-        """Ayarları dosyaya kaydet"""
         config = {
             'discord_webhook': self.discord_webhook,
             'bot_token': self.bot_token,
@@ -712,7 +752,6 @@ class ShutdownApp(ctk.CTk):
             messagebox.showerror("Hata", f"Ayarlar kaydedilemedi: {str(e)}")
 
     def load_config(self):
-        """Kayıtlı ayarları yükle"""
         self.config = {}
         try:
             if os.path.exists(self.config_file):
@@ -724,7 +763,6 @@ class ShutdownApp(ctk.CTk):
         except Exception as e:
             print(f"Ayarlar yüklenemedi: {str(e)}")
 
-    # ----------------------- SİSTEM İZLEME -----------------------
     def monitor_ram(self):
         def update_gui():
             if self.ram_update_running:
