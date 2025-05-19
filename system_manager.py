@@ -118,7 +118,7 @@ class ShutdownApp(ctk.CTk):
             ("💾 RAM Yönetimi", self.create_ram_content),
             ("✖ Program Kapatma", self.create_process_content),
             ("🔔 Bildirimler", self.create_discord_content),
-            ("🤖 Discord Bot", self.create_bot_content),
+            ("🤖 Discord Bot1", self.create_bot_content),
             ("🔄 Güncellemeler", self.create_update_content)
         ]
         
