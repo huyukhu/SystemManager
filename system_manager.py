@@ -54,8 +54,8 @@ class AutoUpdater:
                     f.write(response.content)
             
             messagebox.showinfo("Başarılı", "Program yeniden başlatılacak")
-            python = sys.executable
-            os.execl(python, python, *sys.argv)
+            os.startfile(sys.argv[0])
+            sys.exit()
         except Exception as e:
             messagebox.showerror("Hata", f"Güncelleme başarısız: {str(e)}")
 
@@ -148,7 +148,6 @@ class ShutdownApp(ctk.CTk):
             fg_color="#5bc0de"
         ).pack(side='left', padx=5)
 
-    # Diğer sekme fonksiyonları
     def create_shutdown_content(self, tab):
         frame = ctk.CTkFrame(master=tab)
         frame.pack(pady=20, padx=20, fill='both', expand=True)
@@ -198,7 +197,7 @@ class ShutdownApp(ctk.CTk):
         while True:
             now = datetime.datetime.now()
             if now >= target_time:
-                subprocess.run(["shutdown", "/s", "/t", "0"], shell=True)
+                subprocess.run(["shutdown", "/s", "/t", "0"], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
                 break
             time.sleep(1)
 
@@ -241,10 +240,10 @@ class ShutdownApp(ctk.CTk):
 
     def countdown_shutdown(self, seconds):
         time.sleep(seconds)
-        subprocess.run(["shutdown", "/s", "/t", "0"], shell=True)
+        subprocess.run(["shutdown", "/s", "/t", "0"], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
     def cancel_shutdown(self):
-        subprocess.run(["shutdown", "/a"], shell=True)
+        subprocess.run(["shutdown", "/a"], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
         messagebox.showinfo("Bilgi", "✅ Tüm kapatma planları iptal edildi")
 
     def create_ram_content(self, tab):
