@@ -25,10 +25,13 @@ class AutoUpdater:
     def __init__(self):
         self.repo_url = "https://raw.githubusercontent.com/huyukhu/SystemManager/main/"
         self.current_version = self.get_current_version()
+        self.executable_path = sys.executable if getattr(sys, 'frozen', False) else __file__
+        self.executable_dir = os.path.dirname(self.executable_path)
         
     def get_current_version(self):
         try:
-            with open("version.txt", "r") as f:
+            version_path = os.path.join(self.executable_dir, 'version.txt')
+            with open(version_path, "r") as f:
                 return f.read().strip()
         except:
             return "1.0"
@@ -50,14 +53,36 @@ class AutoUpdater:
             files = ["system_manager.py", "version.txt"]
             for file in files:
                 response = requests.get(f"{self.repo_url}{file}")
-                with open(file, "wb") as f:
+                file_path = os.path.join(self.executable_dir, file)
+                
+                with open(file_path, "wb") as f:
                     f.write(response.content)
             
-            messagebox.showinfo("Başarılı", "Program yeniden başlatılacak")
-            os.startfile(sys.argv[0])
-            sys.exit()
+            self.restart_program()
         except Exception as e:
             messagebox.showerror("Hata", f"Güncelleme başarısız: {str(e)}")
+
+    def restart_program(self):
+        if getattr(sys, 'frozen', False):
+            # EXE için özel yeniden başlatma
+            batch_script = f"""
+            @echo off
+            timeout /t 3 /nobreak >nul
+            del "{self.executable_path}"
+            move "{os.path.join(self.executable_dir, 'system_manager.py')}" "{self.executable_path}"
+            start "" "{self.executable_path}"
+            del "%~f0"
+            """
+            
+            with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as bat_file:
+                bat_file.write(batch_script)
+            
+            subprocess.Popen(['cmd', '/c', bat_file.name], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            sys.exit()
+        else:
+            # Normal Python script için
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
 
 class ShutdownApp(ctk.CTk):
     def __init__(self):
@@ -118,7 +143,7 @@ class ShutdownApp(ctk.CTk):
             ("💾 RAM Yönetimi", self.create_ram_content),
             ("✖ Program Kapatma", self.create_process_content),
             ("🔔 Bildirimler", self.create_discord_content),
-            ("🤖 Discord Bot1", self.create_bot_content),
+            ("🤖 Discord Bot2", self.create_bot_content),
             ("🔄 Güncellemeler", self.create_update_content)
         ]
         
