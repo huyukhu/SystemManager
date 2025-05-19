@@ -18,69 +18,75 @@ import discord
 from discord.ext import commands
 
 # Windows API için gerekli tanımlamalar
-kernel32 = ctypes.WinDLL('kernel32')
-psapi = ctypes.WinDLL('psapi')
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+psapi = ctypes.WinDLL('psapi', use_last_error=True)
 
 class AutoUpdater:
     def __init__(self):
         self.repo_url = "https://raw.githubusercontent.com/huyukhu/SystemManager/main/"
         self.current_version = self.get_current_version()
-        self.executable_path = sys.executable if getattr(sys, 'frozen', False) else __file__
-        self.executable_dir = os.path.dirname(self.executable_path)
         
+        # Hata düzeltmesi: executable_dir hesaplaması
+        if getattr(sys, 'frozen', False):  # PyInstaller ile derlenmişse
+            self.executable_path = sys.executable
+            self.executable_dir = os.path.dirname(self.executable_path)
+        else:  # Script olarak çalışıyorsa
+            self.executable_path = os.path.abspath(__file__)
+            self.executable_dir = os.path.dirname(self.executable_path)
+
     def get_current_version(self):
+        version_path = os.path.join(self.executable_dir, 'version.txt')
         try:
-            version_path = os.path.join(self.executable_dir, 'version.txt')
             with open(version_path, "r") as f:
                 return f.read().strip()
-        except:
+        except FileNotFoundError:
             return "1.0"
-            
+        except Exception as e:
+            messagebox.showerror("Hata", f"Versiyon dosyası okunamadı: {str(e)}")
+            return "1.0"
+
     def check_update(self):
         try:
-            response = requests.get(f"{self.repo_url}version.txt")
+            response = requests.get(f"{self.repo_url}version.txt", timeout=10)
             latest_version = response.text.strip()
-            
-            if latest_version > self.current_version:
-                return True, latest_version
-            return False, None
+            return (latest_version > self.current_version), latest_version
         except Exception as e:
             print("Güncelleme kontrol hatası:", str(e))
             return False, None
-            
+
     def perform_update(self):
         try:
             files = ["system_manager.py", "version.txt"]
             for file in files:
-                response = requests.get(f"{self.repo_url}{file}")
+                response = requests.get(f"{self.repo_url}{file}", timeout=15)
                 file_path = os.path.join(self.executable_dir, file)
                 
                 with open(file_path, "wb") as f:
                     f.write(response.content)
-            
+
             self.restart_program()
         except Exception as e:
-            messagebox.showerror("Hata", f"Güncelleme başarısız: {str(e)}")
+            messagebox.showerror("Güncelleme Hatası", f"Güncelleme başarısız:\n{str(e)}")
 
     def restart_program(self):
         if getattr(sys, 'frozen', False):
-            # EXE için özel yeniden başlatma
-            batch_script = f"""
-            @echo off
+            batch_script = f'''@echo off
+            taskkill /F /IM "{os.path.basename(self.executable_path)}" >nul 2>&1
             timeout /t 3 /nobreak >nul
-            del "{self.executable_path}"
-            move "{os.path.join(self.executable_dir, 'system_manager.py')}" "{self.executable_path}"
+            move /Y "{os.path.join(self.executable_dir, 'system_manager.py')}" "{self.executable_path}" >nul 2>&1
             start "" "{self.executable_path}"
-            del "%~f0"
-            """
-            
-            with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as bat_file:
+            del "%~f0"'''
+
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8') as bat_file:
                 bat_file.write(batch_script)
             
-            subprocess.Popen(['cmd', '/c', bat_file.name], shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.Popen(
+                ['cmd', '/c', bat_file.name],
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.SW_HIDE
+            )
             sys.exit()
         else:
-            # Normal Python script için
             python = sys.executable
             os.execl(python, python, *sys.argv)
 
@@ -90,7 +96,7 @@ class ShutdownApp(ctk.CTk):
         self.updater = AutoUpdater()
         self.check_for_updates()
         
-        self.title("Advanced System Manager 5.0")
+        self.title("Advanced System Manager 5.2")
         self.geometry("1200x800")
         
         # Yapılandırma ayarları
@@ -143,7 +149,7 @@ class ShutdownApp(ctk.CTk):
             ("💾 RAM Yönetimi", self.create_ram_content),
             ("✖ Program Kapatma", self.create_process_content),
             ("🔔 Bildirimler", self.create_discord_content),
-            ("🤖 Discord Bot2", self.create_bot_content),
+            ("🤖 Discord Bot", self.create_bot_content),
             ("🔄 Güncellemeler", self.create_update_content)
         ]
         
@@ -805,7 +811,10 @@ class ShutdownApp(ctk.CTk):
         self.destroy()
 
 if __name__ == "__main__":
-    ctk.set_appearance_mode("dark")
-    ctk.set_default_color_theme("dark-blue")
-    app = ShutdownApp()
-    app.mainloop()
+    try:
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("dark-blue")
+        app = ShutdownApp()
+        app.mainloop()
+    except Exception as e:
+        messagebox.showerror("Critical Error", f"Program crashed: {str(e)}")
