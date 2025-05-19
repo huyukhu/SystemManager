@@ -26,11 +26,13 @@ class AutoUpdater:
         self.repo_url = "https://raw.githubusercontent.com/huyukhu/SystemManager/main/"
         self.current_version = self.get_current_version()
         
-        # Hata düzeltmesi: executable_dir hesaplaması
-        if getattr(sys, 'frozen', False):  # PyInstaller ile derlenmişse
+        # HATA DÜZELTMESİ: executable_dir doğru şekilde tanımlandı
+        if getattr(sys, 'frozen', False):
+            # PyInstaller ile derlenmişse
             self.executable_path = sys.executable
             self.executable_dir = os.path.dirname(self.executable_path)
-        else:  # Script olarak çalışıyorsa
+        else:
+            # Script olarak çalışıyorsa
             self.executable_path = os.path.abspath(__file__)
             self.executable_dir = os.path.dirname(self.executable_path)
 
